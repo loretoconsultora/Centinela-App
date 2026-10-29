@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Centinela",
+  title: "Centinela - App de Revisión Interna",
   description:
     "Centinela — herramienta de revisión de alineación curricular para Venezuela Tierra de Gracia.",
 };

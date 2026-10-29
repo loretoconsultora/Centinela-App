@@ -41,7 +41,7 @@ function LoginForm() {
     <div className="min-h-screen w-full flex items-center justify-center bg-background px-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <Logo size={56} />
+          <Logo size={72} />
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Centinela</h1>
           <p className="text-sm text-foreground-muted text-center">
             Revisión de alineación curricular · Venezuela Tierra de Gracia

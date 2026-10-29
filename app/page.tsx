@@ -157,9 +157,11 @@ export default function HomePage() {
       <header className="border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <Logo size={36} />
+            <Logo size={40} />
             <div>
-              <p className="font-semibold tracking-tight text-foreground leading-none">Centinela</p>
+              <p className="font-semibold tracking-tight text-foreground leading-none">
+                Centinela - App de Revisión Interna
+              </p>
               <p className="text-xs text-foreground-muted leading-none mt-0.5">
                 Venezuela Tierra de Gracia
               </p>
