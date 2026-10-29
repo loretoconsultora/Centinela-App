@@ -332,7 +332,7 @@ export default function HomePage() {
                 [
                   ["archivo", "Archivo"],
                   ["texto", "Pegar texto"],
-                  ["link", "Link de Google"],
+                  ["link", "Link"],
                 ] as [Modo, string][]
               ).map(([m, label]) => (
                 <button
@@ -378,13 +378,20 @@ export default function HomePage() {
             )}
 
             {modo === "link" && (
+              <div className="flex flex-col gap-2">
               <input
                 type="url"
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
-                placeholder="https://docs.google.com/document/d/..."
+                placeholder="https://drive.google.com/file/d/... o https://docs.google.com/document/d/..."
                 className="w-full rounded-[10px] border border-border px-4 py-3 text-sm outline-none focus:border-ve-azul focus:ring-2 focus:ring-ve-azul/20 transition"
               />
+              <p className="text-xs text-foreground-muted">
+                Sirve un Google Doc o Sheet, un archivo de Drive (PDF, Word, Excel) o un link directo
+                a un PDF. Debe estar compartido como &quot;cualquier persona con el enlace puede
+                ver&quot;. Máximo 30 MB.
+              </p>
+              </div>
             )}
           </div>
 

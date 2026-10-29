@@ -4,7 +4,7 @@ import { construirReporte, type CriterioResultado } from "@/lib/rubric";
 import { esRol, type Rol } from "@/lib/roles";
 import {
   extraerDeArchivo,
-  extraerDeLinkGoogle,
+  extraerDeLink,
   extraerDeTexto,
 } from "@/lib/extract";
 import { armarReporteGuardado, reporteParaVista } from "@/lib/reporte-api";
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       } else if (linkGoogle && linkGoogle.trim()) {
         nombreDocumento = linkGoogle.trim();
         sinNombrePropio = true;
-        const resultado = await extraerDeLinkGoogle(linkGoogle.trim());
+        const resultado = await extraerDeLink(linkGoogle.trim());
         texto = resultado.texto;
         advertenciaExtraccion = resultado.advertencia;
       } else if (textoPegado && textoPegado.trim()) {
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       if (body.link) {
         nombreDocumento = body.link;
         sinNombrePropio = true;
-        const resultado = await extraerDeLinkGoogle(body.link);
+        const resultado = await extraerDeLink(body.link);
         texto = resultado.texto;
         advertenciaExtraccion = resultado.advertencia;
       } else if (body.texto) {

@@ -48,7 +48,7 @@ Reglas importantes:
 - No calcules promedios ni el Dictamen final: solo entrega los 10 puntajes crudos, uno por criterio. El servidor hace el cálculo ponderado y la lógica de eliminatorios.
 - Sé estricto y literal con las citas: deben ser fragmentos reales del texto entregado, no paráfrasis.
 - Si el documento es muy corto o no cubre un criterio en absoluto, igual asigna un puntaje razonable (normalmente bajo, ej. 2.0) explicando en la justificación que el documento no lo aborda.
-- Responde ÚNICAMENTE usando la herramienta "reportar_puntajes". No escribas texto fuera de la llamada a la herramienta.`;
+- Debes responder llamando a la herramienta "reportar_puntajes" una sola vez, con todos los datos. No escribas texto fuera de la llamada a la herramienta.`;
 }
 
 const TOOL_SCHEMA: Anthropic.Tool = {
@@ -127,20 +127,48 @@ export async function analizarDocumento(
 
   const mensajeUsuario = `Documento a evaluar: "${nombreDocumento}"\n\n---\n\n${textoDocumento}`;
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 6000,
-    system: construirPromptSistema(),
-    tools: [TOOL_SCHEMA],
-    tool_choice: { type: "tool", name: "reportar_puntajes" },
-    messages: [{ role: "user", content: mensajeUsuario }],
-  });
+  // Opus 5.5 no admite tool_choice forzado ("tool"/"any"): se usa "auto" y el
+  // prompt exige llamar a la herramienta. El pensamiento del modelo cuenta
+  // dentro de max_tokens, por eso el margen es amplio. Se transmite en streaming
+  // para que la conexión no se corte en respuestas largas.
+  async function pedir(extra?: string) {
+    const stream = client.messages.stream({
+      model: MODEL,
+      max_tokens: 16000,
+      system: construirPromptSistema(),
+      tools: [TOOL_SCHEMA],
+      tool_choice: { type: "auto" },
+      messages: [
+        { role: "user", content: mensajeUsuario },
+        ...(extra
+          ? ([{ role: "assistant", content: "Entendido." }, { role: "user", content: extra }] as const)
+          : []),
+      ],
+    });
+    return stream.finalMessage();
+  }
 
-  const toolUse = response.content.find(
+  let response = await pedir();
+  let toolUse = response.content.find(
     (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
   );
+  if (!toolUse && String(response.stop_reason) !== "refusal") {
+    // Un reintento recordándole que debe usar la herramienta.
+    response = await pedir(
+      "Entrega ahora el resultado llamando a la herramienta reportar_puntajes, sin texto adicional."
+    );
+    toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+    );
+  }
+  if (String(response.stop_reason) === "refusal") {
+    throw new Error("El modelo rechazó analizar este documento. Prueba con otro texto o avisa a la administradora técnica.");
+  }
   if (!toolUse) {
-    throw new Error("El modelo no devolvió los puntajes en el formato esperado.");
+    throw new Error("El modelo no devolvió los puntajes en el formato esperado. Vuelve a intentarlo.");
+  }
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("El análisis quedó incompleto por ser demasiado largo. Vuelve a intentarlo o divide el documento.");
   }
 
   const input = toolUse.input as {
