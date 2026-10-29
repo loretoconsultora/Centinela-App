@@ -11,7 +11,7 @@ import { armarReporteGuardado, reporteParaVista } from "@/lib/reporte-api";
 import { guardarDocumento, resolverAutor } from "@/lib/guardar-documento";
 import { obtenerSesion } from "@/lib/sesion";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const sesion = await obtenerSesion();

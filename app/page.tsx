@@ -17,6 +17,8 @@ type Modo = "archivo" | "texto" | "link";
 type Seccion = "revisar" | "gestion";
 
 const CLAVE_VISTA = "centinela_vista";
+// Vercel rechaza peticiones de más de 4,5 MB; se deja margen.
+const LIMITE_ARCHIVO = 4 * 1024 * 1024;
 
 const DESCRIPCION_VISTA: Record<Rol, string> = {
   autora:
@@ -109,6 +111,14 @@ export default function HomePage() {
   }
 
   function elegirArchivo(f: File | null) {
+    if (f && f.size > LIMITE_ARCHIVO) {
+      setArchivo(null);
+      setError(
+        `El archivo pesa ${(f.size / 1024 / 1024).toFixed(1)} MB y el límite es 4 MB. Pega el texto o usa el link de Google Doc.`
+      );
+      return;
+    }
+    setError(null);
     setArchivo(f);
     if (f && !tituloManual) setTitulo(f.name.replace(/\.[^.]+$/, ""));
   }
@@ -137,9 +147,26 @@ export default function HomePage() {
       if (modo === "link") form.set("link", link);
 
       const res = await fetch("/api/review", { method: "POST", body: form });
-      const data = await res.json();
+      const crudo = await res.text();
+      let data: (Partial<ReporteAPI> & { error?: string }) | null = null;
+      try {
+        data = JSON.parse(crudo);
+      } catch {
+        data = null;
+      }
       if (res.status === 401) {
         router.replace("/login");
+        return;
+      }
+      if (!data) {
+        // El servidor no devolvió un mensaje normal: se explica según el código.
+        if (res.status === 413) {
+          setError("El archivo es demasiado grande para subirlo (límite: 4 MB). Pega el texto o usa el link de Google Doc.");
+        } else if (res.status === 504 || res.status === 408) {
+          setError("El análisis tardó más de lo permitido y se cortó. Vuelve a intentarlo; si pasa de nuevo, avísame.");
+        } else {
+          setError(`El servidor respondió con un error inesperado (código ${res.status}). Vuelve a intentarlo; si se repite, avisa a la administradora técnica.`);
+        }
         return;
       }
       if (!res.ok) {
@@ -154,7 +181,7 @@ export default function HomePage() {
       setTitulo("");
       setTituloManual(false);
     } catch {
-      setError("Error de conexión al analizar el documento.");
+      setError("No se pudo conectar con el servidor. Revisa tu internet e inténtalo de nuevo.");
     } finally {
       setCargando(false);
     }
