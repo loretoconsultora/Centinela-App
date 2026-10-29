@@ -120,3 +120,23 @@ body {
   /* Centinela se mantiene en tema claro por decisión de diseño (fondos
    * blancos predominantes, acentos de color); no se invierte en modo oscuro. */
 }
+
+@keyframes progreso-indeterminado {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+.progreso-indeterminado {
+  animation: progreso-indeterminado 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progreso-indeterminado {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.5;
+  }
+}

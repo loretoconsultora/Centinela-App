@@ -11,6 +11,7 @@ import {
 } from "@/lib/documentos";
 import { EstadoBadge, ESTILO_ESTADO } from "./EstadoBadge";
 import { BotonPdf, ReporteView } from "./ReporteView";
+import { ComentariosDocumento } from "./ComentariosDocumento";
 
 function Inicial({ nombre }: { nombre: string }) {
   return (
@@ -20,14 +21,31 @@ function Inicial({ nombre }: { nombre: string }) {
   );
 }
 
+function ContadorComentarios({ n }: { n?: number }) {
+  if (!n) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs text-foreground-muted"
+      title={`${n} ${n === 1 ? "comentario" : "comentarios"}`}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M21 12a8 8 0 01-11.6 7.1L3 21l1.9-5.4A8 8 0 1121 12z" />
+      </svg>
+      {n}
+    </span>
+  );
+}
+
 function DetalleDocumento({
   id,
   vista,
   onCerrar,
+  onComentado,
 }: {
   id: string;
   vista: Rol;
   onCerrar: () => void;
+  onComentado: () => void;
 }) {
   const [datos, setDatos] = useState<{ documento: DocumentoResumen; reporte: ReporteAPI } | null>(
     null
@@ -105,6 +123,11 @@ function DetalleDocumento({
             <div>
               <BotonPdf documentoId={datos.documento.id} vista={vista} />
             </div>
+            <ComentariosDocumento
+              documentoId={datos.documento.id}
+              vista={vista}
+              onComentado={onComentado}
+            />
             <ReporteView reporte={datos.reporte} />
           </div>
         )}
@@ -224,8 +247,9 @@ export function GestionDocumentos({
                           <Inicial nombre={d.autor_nombre} />
                           <span className="truncate">{d.autor_nombre}</span>
                         </span>
-                        <span className="mt-1 block text-xs text-foreground-muted">
+                        <span className="mt-1 flex items-center justify-between gap-2 text-xs text-foreground-muted">
                           {formatearFecha(d.created_at)}
+                          <ContadorComentarios n={d.comentarios} />
                         </span>
                       </button>
                     ))}
@@ -274,8 +298,9 @@ export function GestionDocumentos({
                       <span className="mt-1 block text-xs text-foreground-muted">
                         {formatearFecha(d.created_at)}
                       </span>
-                      <span className="mt-2 block">
+                      <span className="mt-2 flex items-center justify-between gap-2">
                         <EstadoBadge dictamen={d.dictamen} />
+                        <ContadorComentarios n={d.comentarios} />
                       </span>
                     </button>
                   </li>
@@ -301,6 +326,7 @@ export function GestionDocumentos({
                       >
                         <td className="max-w-[22rem] px-2 py-3 font-medium text-foreground">
                           <span className="line-clamp-2 break-words">{d.nombre}</span>
+                          <ContadorComentarios n={d.comentarios} />
                         </td>
                         <td className="px-2 py-3 text-foreground-muted">
                           <span className="inline-flex items-center gap-2">
@@ -325,7 +351,18 @@ export function GestionDocumentos({
         </>
       )}
 
-      {abrirId && <DetalleDocumento id={abrirId} vista={vista} onCerrar={() => onAbrirId(null)} />}
+      {abrirId && (
+        <DetalleDocumento
+          id={abrirId}
+          vista={vista}
+          onCerrar={() => onAbrirId(null)}
+          onComentado={() =>
+            setDocs((prev) =>
+              prev ? prev.map((d) => (d.id === abrirId ? { ...d, comentarios: (d.comentarios ?? 0) + 1 } : d)) : prev
+            )
+          }
+        />
+      )}
     </div>
   );
 }

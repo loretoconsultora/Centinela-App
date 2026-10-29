@@ -3,18 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/app/components/Logo";
-import { EquipoPanel } from "@/app/components/EquipoPanel";
+import { GestionEquipo } from "@/app/components/GestionEquipo";
 import { GestionDocumentos } from "@/app/components/GestionDocumentos";
+import { ModalReporte } from "@/app/components/ModalReporte";
+import { ProgresoAnalisis } from "@/app/components/ProgresoAnalisis";
+import { EstadoBadge } from "@/app/components/EstadoBadge";
 import { NotificacionesBell } from "@/app/components/NotificacionesBell";
-import { BotonPdf, ReporteView } from "@/app/components/ReporteView";
 import type { AutoraOpcion, NotificacionItem } from "@/lib/documentos";
-import { formatearFecha } from "@/lib/documentos";
 import { ROLES, ROL_LABEL, esRol, type PerfilPublico, type Rol } from "@/lib/roles";
 import type { ReporteAPI } from "@/lib/types";
 import { crearClienteNavegador } from "@/lib/supabase/client";
 
 type Modo = "archivo" | "texto" | "link";
-type Seccion = "revisar" | "gestion";
+type Seccion = "revisar" | "gestion" | "equipo";
 
 const CLAVE_VISTA = "centinela_vista";
 // Vercel rechaza peticiones de más de 4,5 MB; se deja margen.
@@ -26,7 +27,7 @@ const DESCRIPCION_VISTA: Record<Rol, string> = {
   revisora_nucleo:
     "Corre cualquier documento del equipo y revisa el reporte completo, con justificaciones y citas de ambos ejes.",
   administradora:
-    "Gestiona el acceso del equipo y corre documentos con el reporte completo.",
+    "Corre documentos del equipo y revisa el reporte completo, con justificaciones y citas de ambos ejes.",
 };
 
 function vistaInicial(roles: Rol[]): Rol {
@@ -59,6 +60,7 @@ export default function HomePage() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reporte, setReporte] = useState<ReporteAPI | null>(null);
+  const [verReporte, setVerReporte] = useState(false);
 
   useEffect(() => {
     fetch("/api/me")
@@ -93,9 +95,11 @@ export default function HomePage() {
   function elegirVista(v: Rol) {
     setVista(v);
     setReporte(null);
+    setVerReporte(false);
     setError(null);
     setDocAbierto(null);
     setAutorId("");
+    if (v === "autora") setSeccion((s) => (s === "equipo" ? "revisar" : s));
     try {
       localStorage.setItem(CLAVE_VISTA, v);
     } catch {
@@ -106,6 +110,11 @@ export default function HomePage() {
   // Desde la campanita: ir a la vista que corresponde y abrir el documento.
   function abrirDesdeNotificacion(n: NotificacionItem) {
     if (perfil && perfil.roles.includes(n.vista) && n.vista !== vista) elegirVista(n.vista);
+    if (n.tipo === "alerta_bloqueados") {
+      setSeccion("equipo");
+      setDocAbierto(null);
+      return;
+    }
     setSeccion("gestion");
     setDocAbierto(n.documento_id);
   }
@@ -136,6 +145,7 @@ export default function HomePage() {
     e.preventDefault();
     setError(null);
     setReporte(null);
+    setVerReporte(false);
     setCargando(true);
     try {
       const form = new FormData();
@@ -288,6 +298,7 @@ export default function HomePage() {
             [
               ["revisar", "Revisar documento"],
               ["gestion", "Gestión de documentos"],
+              ...(vista !== "autora" ? [["equipo", "Gestión del equipo"]] : []),
             ] as [Seccion, string][]
           ).map(([clave, etiqueta]) => (
             <button
@@ -311,20 +322,26 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-10 flex flex-col gap-8">
-        {seccion === "gestion" ? (
+        {seccion === "equipo" && vista !== "autora" ? (
+          <GestionEquipo key={vista} esAdmin={vista === "administradora"} />
+        ) : seccion === "gestion" ? (
           <GestionDocumentos key={vista} vista={vista} abrirId={docAbierto} onAbrirId={setDocAbierto} />
         ) : (
           <>
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
-            {vista === "administradora" ? "Administración y revisión" : "Revisar un documento"}
+            Revisar un documento
           </h1>
           <p className="text-sm text-foreground-muted mt-1 max-w-2xl">{DESCRIPCION_VISTA[vista]}</p>
         </div>
 
-        {vista === "administradora" && <EquipoPanel />}
+        {cargando && <ProgresoAnalisis />}
 
-        <form onSubmit={onSubmit} className="card card-lg p-6 sm:p-8 flex flex-col gap-6">
+        {!cargando && !reporte && (
+        <form
+          onSubmit={onSubmit}
+          className="card card-lg p-6 sm:p-8 flex flex-col gap-6"
+        >
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Documento a revisar</p>
             <div className="flex gap-2 mb-3">
@@ -466,48 +483,58 @@ export default function HomePage() {
             disabled={!puedeEnviar}
             className="self-start rounded-[10px] bg-foreground text-white font-medium px-6 py-3 transition hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {cargando ? "Analizando…" : "Analizar documento"}
+            Analizar documento
           </button>
         </form>
+        )}
 
-        {reporte && (
-          <div className="flex flex-col gap-6">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="min-w-0">
-                <h2 className="text-lg font-medium text-foreground break-words">
-                  {reporte.documento}
-                </h2>
-                <p className="mt-1 text-sm text-foreground-muted">
-                  {reporte.autorNombre ? `${reporte.autorNombre} · ` : ""}
-                  {formatearFecha(reporte.fecha)}
-                </p>
+        {reporte && !cargando && (
+          <div
+            role="status"
+            className="card card-lg flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+          >
+            <div className="min-w-0">
+              <p className="text-base font-semibold tracking-tight text-foreground">
+                ✅ El análisis terminó
+              </p>
+              <p className="mt-1 break-words text-sm text-foreground-muted">{reporte.documento}</p>
+              <div className="mt-2">
+                <EstadoBadge dictamen={reporte.dictamen} />
               </div>
-              {reporte.documentoId && <BotonPdf documentoId={reporte.documentoId} vista={vista} />}
             </div>
-
-            {reporte.guardado ? (
-              <p className="text-sm text-foreground-muted bg-surface rounded-[10px] px-3 py-2">
-                Guardado en Gestión de documentos.{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSeccion("gestion");
-                    setDocAbierto(reporte.documentoId ?? null);
-                  }}
-                  className="font-medium text-foreground underline underline-offset-2"
-                >
-                  Ver en la lista
-                </button>
-              </p>
-            ) : (
-              <p className="text-sm text-[#8a6d00] bg-amarillo/10 rounded-[10px] px-3 py-2">
-                El reporte se generó, pero no pudo guardarse en Gestión de documentos. Avisa a la
-                administradora técnica.
-              </p>
-            )}
-
-            <ReporteView reporte={reporte} />
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+            <button
+              type="button"
+              onClick={() => setVerReporte(true)}
+              className="rounded-[10px] bg-foreground px-6 py-3 font-medium text-white transition hover:opacity-85"
+            >
+              Ver reporte
+            </button>
+            <button
+              type="button"
+              onClick={() => setReporte(null)}
+              className="text-sm text-foreground-muted underline underline-offset-2 hover:text-foreground"
+            >
+              Revisar otro documento
+            </button>
+            </div>
           </div>
+        )}
+
+        {reporte && verReporte && (
+          <ModalReporte
+            reporte={reporte}
+            vista={vista}
+            onCerrar={() => {
+              setVerReporte(false);
+              setReporte(null);
+            }}
+            onVerEnLista={() => {
+              setVerReporte(false);
+              setSeccion("gestion");
+              setDocAbierto(reporte.documentoId ?? null);
+            }}
+          />
         )}
           </>
         )}

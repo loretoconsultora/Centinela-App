@@ -2,7 +2,7 @@ import "server-only";
 import type { Sesion } from "./sesion";
 import type { Rol } from "./roles";
 import { crearClienteAdmin } from "./supabase/admin";
-import { ETIQUETA_ESTADO } from "./documentos";
+import { ETIQUETA_ESTADO, UMBRAL_BLOQUEADOS } from "./documentos";
 import type { ReporteGuardado } from "./types";
 
 type SesionOk = Extract<Sesion, { estado: "ok" }>;
@@ -115,6 +115,31 @@ export async function guardarDocumento(e: Entrada): Promise<Resultado> {
         );
       }
       if (filas.length > 0) await admin.from("notificaciones").insert(filas);
+    }
+
+    // Alarma automática: más de 3 documentos bloqueados acumulados por la misma
+    // autora → aviso 🚨 a todas las revisoras para revisarlo personalmente.
+    if (e.reporte.dictamen === "bloqueado") {
+      const { count } = await admin
+        .from("documentos")
+        .select("id", { count: "exact", head: true })
+        .eq("autor_id", autorId)
+        .eq("dictamen", "bloqueado");
+      if ((count ?? 0) > UMBRAL_BLOQUEADOS) {
+        const { data: revisoras } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("activo", true)
+          .contains("roles", ["revisora_nucleo"]);
+        const alertas = (revisoras ?? []).map((r) => ({
+          usuario_id: r.id,
+          documento_id: doc.id,
+          vista: "revisora_nucleo" as const,
+          tipo: "alerta_bloqueados" as const,
+          mensaje: `🚨 ${autorNombre} acumula ${count} documentos bloqueados: revisar personalmente.`,
+        }));
+        if (alertas.length > 0) await admin.from("notificaciones").insert(alertas);
+      }
     }
 
     return { guardado: true, documentoId: doc.id, autorNombre };

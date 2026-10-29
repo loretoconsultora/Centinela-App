@@ -53,6 +53,9 @@ Los permisos se verifican en el servidor contra el perfil real, nunca por lo que
 - Cada revisión queda registrada (`public.documentos`) con el nombre del documento, la autora dueña, la fecha y el dictamen. Cada archivo, link o texto pegado es una entrada aparte, con el nombre que escribe la persona.
 - La sección **Gestión de documentos** muestra un tablero por estado (Bloqueado / Aprobado con observaciones / Aprobado) y debajo el listado completo.
 - La **campanita** de la barra avisa a la autora y a las revisoras de núcleo cuando un documento queda Bloqueado o Aprobado con observaciones (`public.notificaciones`). Todo dentro de la app; no se envían correos.
+- **Comentarios**: en el detalle de cada documento hay un hilo tipo foro. Solo lo escriben revisoras de núcleo y administradoras; las autoras lo leen y reciben un aviso en la campanita (`public.comentarios`, SQL `supabase/03_comentarios_equipo.sql`).
+- **Gestión del equipo** (solo vistas de revisora y administradora): tabla por autora con documentos subidos, aprobados, con observaciones y bloqueados, más la fila de total. Con más de 3 bloqueados aparece 🚨 "Revisar personalmente" y se avisa por la campanita a las revisoras. Ahí también está el panel de equipo y accesos de la administradora.
+- Mientras corre un análisis se muestra una barra de carga con el tiempo transcurrido; al terminar aparece el aviso **Ver reporte**, que abre el dictamen (con descarga de PDF) y se cierra con la tachita.
 - Cada reporte se descarga en PDF como `Resultado Revisión - <nombre del documento>.pdf`.
 - Las tablas tienen RLS sin políticas a propósito: solo se leen y escriben desde el servidor, con la clave secreta, después de verificar el rol.
 

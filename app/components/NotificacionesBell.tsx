@@ -120,7 +120,11 @@ export function NotificacionesBell({
                 >
                   <span
                     className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                      n.tipo === "bloqueado" ? "bg-rojo" : "bg-amarillo"
+                      n.tipo === "bloqueado" || n.tipo === "alerta_bloqueados"
+                        ? "bg-rojo"
+                        : n.tipo === "comentario"
+                          ? "bg-ve-azul"
+                          : "bg-amarillo"
                     }`}
                   />
                   <span className="min-w-0 flex-1">

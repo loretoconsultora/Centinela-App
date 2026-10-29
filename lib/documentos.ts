@@ -7,13 +7,37 @@ export interface DocumentoResumen {
   autor_nombre: string;
   dictamen: Dictamen;
   created_at: string;
+  /** Cantidad de comentarios (solo en el listado). */
+  comentarios?: number;
 }
+
+export interface ComentarioItem {
+  id: string;
+  autor_id: string;
+  autor_nombre: string;
+  texto: string;
+  created_at: string;
+}
+
+export interface FilaEquipo {
+  id: string;
+  nombre: string;
+  email: string;
+  total: number;
+  aprobado: number;
+  observaciones: number;
+  bloqueado: number;
+  alerta: boolean;
+}
+
+/** Con más de este número de documentos bloqueados se activa la alarma. */
+export const UMBRAL_BLOQUEADOS = 3;
 
 export interface NotificacionItem {
   id: string;
   documento_id: string | null;
   vista: "autora" | "revisora_nucleo";
-  tipo: "bloqueado" | "aprobado_con_observaciones";
+  tipo: "bloqueado" | "aprobado_con_observaciones" | "comentario" | "alerta_bloqueados";
   mensaje: string;
   leida: boolean;
   created_at: string;

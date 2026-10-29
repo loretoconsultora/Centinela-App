@@ -36,5 +36,18 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-  return NextResponse.json(data);
+
+  // Cantidad de comentarios por documento (si la tabla aún no existe, se omite).
+  const ids = data.map((d) => d.id);
+  const cuentas = new Map<string, number>();
+  if (ids.length > 0) {
+    const { data: coms } = await admin
+      .from("comentarios")
+      .select("documento_id")
+      .in("documento_id", ids);
+    for (const c of coms ?? []) {
+      cuentas.set(c.documento_id, (cuentas.get(c.documento_id) ?? 0) + 1);
+    }
+  }
+  return NextResponse.json(data.map((d) => ({ ...d, comentarios: cuentas.get(d.id) ?? 0 })));
 }
