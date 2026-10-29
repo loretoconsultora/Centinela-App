@@ -5,12 +5,10 @@ export function EjeSection({
   titulo,
   subtitulo,
   eje,
-  detalleOculto,
 }: {
   titulo: string;
   subtitulo: string;
   eje: EjeReporte;
-  detalleOculto?: boolean;
 }) {
   return (
     <section className="card card-lg p-6 sm:p-8">
@@ -42,10 +40,10 @@ export function EjeSection({
                   {c.nombre}
                   <span className="text-foreground-muted font-normal">· {Math.round(c.peso * 100)}%</span>
                 </p>
-                {!detalleOculto && c.justificacion && (
+                {c.justificacion && (
                   <p className="text-sm text-foreground-muted mt-1.5">{c.justificacion}</p>
                 )}
-                {!detalleOculto && c.citaTextual && (
+                {c.citaTextual && (
                   <blockquote className="mt-2 text-sm italic text-foreground-muted border-l-2 border-border-strong pl-3">
                     “{c.citaTextual}”
                   </blockquote>
@@ -57,12 +55,6 @@ export function EjeSection({
         ))}
       </div>
 
-      {detalleOculto && (
-        <p className="mt-4 text-xs text-foreground-muted">
-          Detalle simplificado: no se muestran justificaciones ni citas de este eje para esta
-          vista.
-        </p>
-      )}
     </section>
   );
 }

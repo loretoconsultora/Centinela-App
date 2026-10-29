@@ -23,7 +23,7 @@ Copia `.env.example` a `.env.local` y completa:
 
 En Vercel: Project Settings → Environment Variables. Tras agregarlas hay que redeployar.
 
-La base de datos se prepara con `supabase/01_schema.sql` (perfiles, roles, invitaciones y reglas RLS). La lista de personas y la creación de cuentas contienen datos reales y no viven en el repo.
+La base de datos se prepara en orden con `supabase/01_schema.sql` (perfiles, roles, invitaciones y reglas RLS) y `supabase/02_gestion_documentos.sql` (historial de documentos y notificaciones). La lista de personas y la creación de cuentas contienen datos reales y no viven en el repo.
 
 ## Desarrollo local
 
@@ -42,11 +42,23 @@ PDF, Word (`.docx`), Excel/Sheets (`.xlsx`, `.csv`), texto pegado, o un link dir
 
 Cada persona inicia sesión con su correo y contraseña (Supabase Auth). Su perfil (`public.profiles`) trae una lista de roles: `autora`, `revisora_nucleo`, `administradora`. Quien tiene varios alterna entre sus vistas desde el selector de la cabecera.
 
-- **Autora**: sube sus documentos y recibe el reporte simplificado (el Eje B sin justificaciones ni citas).
-- **Revisora de núcleo**: corre cualquier documento y ve el reporte completo.
-- **Administradora**: ve la lista del equipo y sus accesos, y corre documentos con el reporte completo.
+- **Autora**: sube sus documentos y ve el reporte completo de los suyos (puntaje, justificación y cita de cada criterio de ambos ejes, más la recomendación). Solo puede abrir sus propios documentos.
+- **Revisora de núcleo**: corre cualquier documento (puede subirlo a nombre de una autora) y ve todos los documentos del equipo.
+- **Administradora**: lo mismo que la revisora, más la lista del equipo y sus accesos.
 
 Los permisos se verifican en el servidor contra el perfil real, nunca por lo que mande el navegador. En el primer ingreso se obliga a cambiar la contraseña inicial.
+
+## Gestión de documentos, campanita y PDF
+
+- Cada revisión queda registrada (`public.documentos`) con el nombre del documento, la autora dueña, la fecha y el dictamen. Cada archivo, link o texto pegado es una entrada aparte, con el nombre que escribe la persona.
+- La sección **Gestión de documentos** muestra un tablero por estado (Bloqueado / Aprobado con observaciones / Aprobado) y debajo el listado completo.
+- La **campanita** de la barra avisa a la autora y a las revisoras de núcleo cuando un documento queda Bloqueado o Aprobado con observaciones (`public.notificaciones`). Todo dentro de la app; no se envían correos.
+- Cada reporte se descarga en PDF como `Resultado Revisión - <nombre del documento>.pdf`.
+- Las tablas tienen RLS sin políticas a propósito: solo se leen y escriben desde el servidor, con la clave secreta, después de verificar el rol.
+
+## Dictamen
+
+Un eliminatorio en rojo, o un Eje (A o B) en rojo, deja el documento **Bloqueado**; si no, un Eje en amarillo lo deja **Aprobado con observaciones**; con ambos en verde queda **Aprobado**. Los puntajes los calcula el servidor, no el modelo.
 
 ## Despliegue
 

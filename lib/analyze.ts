@@ -42,6 +42,9 @@ Evalúa qué tan lejos está el documento del currículo bolivariano/chavista (2
 ${listaEjeB}
 
 Reglas importantes:
+- Además de los 10 puntajes, entrega dos textos para la autora, en español y en tono claro y respetuoso:
+  · hallazgo_principal (3 a 5 oraciones): la lectura de conjunto del documento. Qué tiene de sólido, dónde se rompe el hilo, y si mezcla partes que provienen de marcos ideológicos o conceptuales distintos sin reconciliarlas. Si el promedio de un eje se ve moderado pero hay criterios en rojo, explícalo.
+  · recomendacion_autora (3 a 6 oraciones): qué debe hacer la autora, en orden de prioridad. Distingue entre corregir redacción y rehacer una base (por ejemplo, la fundamentación legal o el perfil del egresado) cuando el problema es de origen, y nombra las secciones concretas del documento que hay que trabajar.
 - No calcules promedios ni el Dictamen final: solo entrega los 10 puntajes crudos, uno por criterio. El servidor hace el cálculo ponderado y la lógica de eliminatorios.
 - Sé estricto y literal con las citas: deben ser fragmentos reales del texto entregado, no paráfrasis.
 - Si el documento es muy corto o no cubre un criterio en absoluto, igual asigna un puntaje razonable (normalmente bajo, ej. 2.0) explicando en la justificación que el documento no lo aborda.
@@ -51,7 +54,7 @@ Reglas importantes:
 const TOOL_SCHEMA: Anthropic.Tool = {
   name: "reportar_puntajes",
   description:
-    "Reporta los 10 puntajes crudos (uno por criterio de la rúbrica Centinela v3), con justificación y cita textual para cada uno.",
+    "Reporta los 10 puntajes crudos (uno por criterio de la rúbrica Centinela v3), con justificación y cita textual para cada uno, más el hallazgo principal y la recomendación para la autora.",
   input_schema: {
     type: "object",
     properties: {
@@ -76,8 +79,16 @@ const TOOL_SCHEMA: Anthropic.Tool = {
           required: ["id", "puntaje", "justificacion", "cita_textual"],
         },
       },
+      hallazgo_principal: {
+        type: "string",
+        description: "Lectura de conjunto del documento (3 a 5 oraciones).",
+      },
+      recomendacion_autora: {
+        type: "string",
+        description: "Qué debe hacer la autora, en orden de prioridad (3 a 6 oraciones).",
+      },
     },
-    required: ["criterios"],
+    required: ["criterios", "hallazgo_principal", "recomendacion_autora"],
   },
 };
 
@@ -91,6 +102,10 @@ interface PuntajeCrudo {
 export interface AnalisisResultado {
   ejeA: CriterioResultado[];
   ejeB: CriterioResultado[];
+  // Tokens que consumió el análisis (sirve para calcular el costo por documento).
+  uso: { entrada: number; salida: number };
+  hallazgoPrincipal: string;
+  recomendacion: string;
 }
 
 function clampPuntaje(n: number): number {
@@ -114,7 +129,7 @@ export async function analizarDocumento(
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 6000,
     system: construirPromptSistema(),
     tools: [TOOL_SCHEMA],
     tool_choice: { type: "tool", name: "reportar_puntajes" },
@@ -128,7 +143,11 @@ export async function analizarDocumento(
     throw new Error("El modelo no devolvió los puntajes en el formato esperado.");
   }
 
-  const input = toolUse.input as { criterios?: PuntajeCrudo[] };
+  const input = toolUse.input as {
+    criterios?: PuntajeCrudo[];
+    hallazgo_principal?: string;
+    recomendacion_autora?: string;
+  };
   const criterios = input.criterios ?? [];
 
   const byId = new Map(criterios.map((c) => [c.id, c]));
@@ -152,5 +171,14 @@ export async function analizarDocumento(
   const ejeA = criterios.filter((c) => idsEjeA.has(c.id)).map(aResultado);
   const ejeB = criterios.filter((c) => idsEjeB.has(c.id)).map(aResultado);
 
-  return { ejeA, ejeB };
+  return {
+    ejeA,
+    ejeB,
+    hallazgoPrincipal: (input.hallazgo_principal ?? "").trim(),
+    recomendacion: (input.recomendacion_autora ?? "").trim(),
+    uso: {
+      entrada: response.usage?.input_tokens ?? 0,
+      salida: response.usage?.output_tokens ?? 0,
+    },
+  };
 }

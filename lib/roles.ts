@@ -17,11 +17,6 @@ export function esRol(valor: unknown): valor is Rol {
   return typeof valor === "string" && (ROLES as string[]).includes(valor);
 }
 
-/** La vista de Autora recibe el reporte simplificado; las demás, el completo. */
-export function vistaVeDetalleCompleto(vista: Rol): boolean {
-  return vista !== "autora";
-}
-
 export interface PerfilPublico {
   email: string;
   nombre: string | null;

@@ -1,34 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { analizarDocumento } from "@/lib/analyze";
 import { construirReporte, type CriterioResultado } from "@/lib/rubric";
-import { esRol, vistaVeDetalleCompleto, type Rol } from "@/lib/roles";
+import { esRol, type Rol } from "@/lib/roles";
 import {
   extraerDeArchivo,
   extraerDeLinkGoogle,
   extraerDeTexto,
 } from "@/lib/extract";
-import type { CriterioReporte, EjeReporte, ReporteAPI } from "@/lib/types";
+import { armarReporteGuardado, reporteParaVista } from "@/lib/reporte-api";
+import { guardarDocumento, resolverAutor } from "@/lib/guardar-documento";
 import { obtenerSesion } from "@/lib/sesion";
 
 export const maxDuration = 120;
-
-function aEjeReporte(
-  resultados: ReturnType<typeof construirReporte>["ejeA"],
-  simplificado: boolean
-): EjeReporte {
-  const criterios: CriterioReporte[] = resultados.criterios.map((c) => ({
-    id: c.id,
-    numero: c.numero,
-    nombre: c.nombre,
-    peso: c.peso,
-    puntaje: c.puntaje,
-    color: c.color,
-    eliminatorio: simplificado ? undefined : c.eliminatorio,
-    justificacion: simplificado ? "" : c.justificacion,
-    citaTextual: simplificado ? "" : c.citaTextual,
-  }));
-  return { promedio: resultados.promedio, color: resultados.color, criterios };
-}
 
 export async function POST(request: NextRequest) {
   const sesion = await obtenerSesion();
@@ -50,11 +33,18 @@ export async function POST(request: NextRequest) {
     let texto = "";
     let nombreDocumento = "Documento sin título";
     let vistaPedida: unknown = "autora";
+    let autorPedido: string | null = null;
+    let tituloPedido = "";
+    let sinNombrePropio = false; // texto pegado o link: la persona debe nombrarlo
     let advertenciaExtraccion: string | undefined;
 
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
       vistaPedida = form.get("vista") || "autora";
+      const autorForm = form.get("autor_id");
+      autorPedido = typeof autorForm === "string" && autorForm ? autorForm : null;
+      const tituloForm = form.get("titulo");
+      tituloPedido = typeof tituloForm === "string" ? tituloForm.trim() : "";
       const archivo = form.get("archivo") as File | null;
       const textoPegado = form.get("texto") as string | null;
       const linkGoogle = form.get("link") as string | null;
@@ -67,11 +57,13 @@ export async function POST(request: NextRequest) {
         advertenciaExtraccion = resultado.advertencia;
       } else if (linkGoogle && linkGoogle.trim()) {
         nombreDocumento = linkGoogle.trim();
+        sinNombrePropio = true;
         const resultado = await extraerDeLinkGoogle(linkGoogle.trim());
         texto = resultado.texto;
         advertenciaExtraccion = resultado.advertencia;
       } else if (textoPegado && textoPegado.trim()) {
         nombreDocumento = "Texto pegado";
+        sinNombrePropio = true;
         const resultado = extraerDeTexto(textoPegado);
         texto = resultado.texto;
         advertenciaExtraccion = resultado.advertencia;
@@ -84,13 +76,17 @@ export async function POST(request: NextRequest) {
     } else {
       const body = await request.json();
       vistaPedida = body.vista || "autora";
+      autorPedido = typeof body.autor_id === "string" && body.autor_id ? body.autor_id : null;
+      tituloPedido = typeof body.titulo === "string" ? body.titulo.trim() : "";
       if (body.link) {
         nombreDocumento = body.link;
+        sinNombrePropio = true;
         const resultado = await extraerDeLinkGoogle(body.link);
         texto = resultado.texto;
         advertenciaExtraccion = resultado.advertencia;
       } else if (body.texto) {
         nombreDocumento = body.nombre || "Texto pegado";
+        sinNombrePropio = !body.nombre;
         const resultado = extraerDeTexto(body.texto);
         texto = resultado.texto;
         advertenciaExtraccion = resultado.advertencia;
@@ -99,13 +95,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Cada envío es una entrada aparte, con su propio nombre. Un texto pegado o
+    // un link no traen nombre, así que hay que escribirlo.
+    if (tituloPedido) {
+      nombreDocumento = tituloPedido.slice(0, 200);
+    } else if (sinNombrePropio) {
+      return NextResponse.json(
+        { error: "Escribe el nombre del documento para poder registrarlo." },
+        { status: 400 }
+      );
+    }
+
     // La vista la pide el navegador, pero solo se concede si la persona
     // tiene de verdad ese rol. Nadie puede pedir el reporte completo sin él.
     if (!esRol(vistaPedida) || !sesion.perfil.roles.includes(vistaPedida)) {
       return NextResponse.json({ error: "No tienes ese rol." }, { status: 403 });
     }
     const vista: Rol = vistaPedida;
-    const simplificado = !vistaVeDetalleCompleto(vista);
 
     if (!texto || texto.trim().length < 50) {
       return NextResponse.json(
@@ -114,26 +120,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { ejeA, ejeB } = await analizarDocumento(texto, nombreDocumento);
+    const autor = await resolverAutor(sesion, vista, autorPedido);
+    if (!autor) {
+      return NextResponse.json(
+        { error: "La autora elegida no existe o no tiene el rol de autora." },
+        { status: 400 }
+      );
+    }
+
+    const { ejeA, ejeB, uso, hallazgoPrincipal, recomendacion } = await analizarDocumento(texto, nombreDocumento);
 
     const reporte = construirReporte(
       ejeA as CriterioResultado[],
       ejeB as CriterioResultado[]
     );
 
-    const respuesta: ReporteAPI = {
-      documento: nombreDocumento,
-      vista,
-      fecha: new Date().toISOString(),
-      dictamen: reporte.dictamen,
-      // En la vista de Autora no se nombra qué modelo anterior disparó el
-      // bloqueo (E2/E3); solo se informa si fue por la alineación con VTG (E1).
-      eliminatoriosDisparados: simplificado
-        ? reporte.eliminatoriosDisparados.filter((e) => e === "E1")
-        : reporte.eliminatoriosDisparados,
-      ejeA: aEjeReporte(reporte.ejeA, false),
-      ejeB: aEjeReporte(reporte.ejeB, simplificado),
-      advertenciaExtraccion,
+    const fecha = new Date().toISOString();
+    const guardado = armarReporteGuardado(
+      reporte,
+      nombreDocumento,
+      fecha,
+      { hallazgoPrincipal, recomendacion },
+      advertenciaExtraccion
+    );
+
+    // Se registra en "Gestión de documentos". Si el guardado falla (p. ej. aún
+    // no se corrió el SQL 02), la persona igual recibe su reporte.
+    const registro = await guardarDocumento({
+      sesion,
+      autor,
+      reporte: guardado,
+      uso,
+    });
+
+    const respuesta = {
+      ...reporteParaVista(guardado, vista),
+      documentoId: registro.documentoId,
+      autorNombre: registro.autorNombre,
+      guardado: registro.guardado,
     };
 
     return NextResponse.json(respuesta);

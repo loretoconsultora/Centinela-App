@@ -249,6 +249,8 @@ function calcularEje(
 /**
  * Determina el Dictamen final según la tabla de la rúbrica v3:
  *  - Si cualquiera de E1/E2/E3 está en rojo → Bloqueado, sin importar el resto.
+ *  - Si el promedio de Eje A o de Eje B queda en rojo → Bloqueado (acordado en
+ *    el taller del 29/oct/2026: un eje en rojo hace que el dictamen se bloquee).
  *  - Si ningún eliminatorio está en rojo, pero Eje A o Eje B están en amarillo
  *    → Aprobado con observaciones.
  *  - Si Eje A y Eje B están ambos en verde y ningún eliminatorio en rojo
@@ -265,7 +267,11 @@ function calcularDictamen(
     }
   }
 
-  if (eliminatoriosDisparados.length > 0) {
+  if (
+    eliminatoriosDisparados.length > 0 ||
+    ejeA.color === "rojo" ||
+    ejeB.color === "rojo"
+  ) {
     return { dictamen: "bloqueado", eliminatoriosDisparados };
   }
   if (ejeA.color === "amarillo" || ejeB.color === "amarillo") {

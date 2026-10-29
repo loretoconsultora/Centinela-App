@@ -3,20 +3,24 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/app/components/Logo";
-import { DictamenBanner } from "@/app/components/DictamenBanner";
-import { EjeSection } from "@/app/components/EjeSection";
 import { EquipoPanel } from "@/app/components/EquipoPanel";
+import { GestionDocumentos } from "@/app/components/GestionDocumentos";
+import { NotificacionesBell } from "@/app/components/NotificacionesBell";
+import { BotonPdf, ReporteView } from "@/app/components/ReporteView";
+import type { AutoraOpcion, NotificacionItem } from "@/lib/documentos";
+import { formatearFecha } from "@/lib/documentos";
 import { ROLES, ROL_LABEL, esRol, type PerfilPublico, type Rol } from "@/lib/roles";
 import type { ReporteAPI } from "@/lib/types";
 import { crearClienteNavegador } from "@/lib/supabase/client";
 
 type Modo = "archivo" | "texto" | "link";
+type Seccion = "revisar" | "gestion";
 
 const CLAVE_VISTA = "centinela_vista";
 
 const DESCRIPCION_VISTA: Record<Rol, string> = {
   autora:
-    "Sube tu documento y recibe tu resultado: Eje A, Eje B y Dictamen, en versión simplificada.",
+    "Sube tu documento y recibe tu resultado completo: puntaje de cada criterio, citas del texto y recomendación.",
   revisora_nucleo:
     "Corre cualquier documento del equipo y revisa el reporte completo, con justificaciones y citas de ambos ejes.",
   administradora:
@@ -38,6 +42,13 @@ export default function HomePage() {
   const [perfil, setPerfil] = useState<PerfilPublico | null>(null);
   const [errorCuenta, setErrorCuenta] = useState<string | null>(null);
   const [vista, setVista] = useState<Rol>("autora");
+  const [seccion, setSeccion] = useState<Seccion>("revisar");
+  const [docAbierto, setDocAbierto] = useState<string | null>(null);
+
+  const [titulo, setTitulo] = useState("");
+  const [tituloManual, setTituloManual] = useState(false);
+  const [autoras, setAutoras] = useState<AutoraOpcion[]>([]);
+  const [autorId, setAutorId] = useState("");
 
   const [modo, setModo] = useState<Modo>("archivo");
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -69,15 +80,37 @@ export default function HomePage() {
       .catch(() => setErrorCuenta("Error de conexión."));
   }, [router]);
 
+  // Revisoras y administradoras pueden subir un documento a nombre de una autora.
+  useEffect(() => {
+    if (!perfil || vista === "autora") return;
+    fetch("/api/autoras")
+      .then(async (res) => (res.ok ? setAutoras(await res.json()) : setAutoras([])))
+      .catch(() => setAutoras([]));
+  }, [perfil, vista]);
+
   function elegirVista(v: Rol) {
     setVista(v);
     setReporte(null);
     setError(null);
+    setDocAbierto(null);
+    setAutorId("");
     try {
       localStorage.setItem(CLAVE_VISTA, v);
     } catch {
       // no pasa nada si no se puede recordar
     }
+  }
+
+  // Desde la campanita: ir a la vista que corresponde y abrir el documento.
+  function abrirDesdeNotificacion(n: NotificacionItem) {
+    if (perfil && perfil.roles.includes(n.vista) && n.vista !== vista) elegirVista(n.vista);
+    setSeccion("gestion");
+    setDocAbierto(n.documento_id);
+  }
+
+  function elegirArchivo(f: File | null) {
+    setArchivo(f);
+    if (f && !tituloManual) setTitulo(f.name.replace(/\.[^.]+$/, ""));
   }
 
   async function cerrarSesion() {
@@ -97,6 +130,8 @@ export default function HomePage() {
     try {
       const form = new FormData();
       form.set("vista", vista);
+      form.set("titulo", titulo.trim());
+      if (vista !== "autora" && autorId) form.set("autor_id", autorId);
       if (modo === "archivo" && archivo) form.set("archivo", archivo);
       if (modo === "texto") form.set("texto", texto);
       if (modo === "link") form.set("link", link);
@@ -112,6 +147,12 @@ export default function HomePage() {
         return;
       }
       setReporte(data as ReporteAPI);
+      // Cada envío queda como una entrada aparte: se limpia para el siguiente.
+      setArchivo(null);
+      setTexto("");
+      setLink("");
+      setTitulo("");
+      setTituloManual(false);
     } catch {
       setError("Error de conexión al analizar el documento.");
     } finally {
@@ -121,6 +162,7 @@ export default function HomePage() {
 
   const puedeEnviar =
     !cargando &&
+    titulo.trim().length > 0 &&
     ((modo === "archivo" && !!archivo) ||
       (modo === "texto" && texto.trim().length > 20) ||
       (modo === "link" && link.trim().length > 10));
@@ -155,7 +197,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen w-full bg-background">
       <header className="border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <Logo size={40} />
             <div>
@@ -198,6 +240,7 @@ export default function HomePage() {
             )}
 
             <div className="flex items-center gap-3">
+              <NotificacionesBell onAbrir={abrirDesdeNotificacion} />
               <span className="text-sm text-foreground-muted hidden sm:inline">
                 {perfil.nombre ?? perfil.email}
               </span>
@@ -210,10 +253,41 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        <nav
+          aria-label="Secciones"
+          className="max-w-6xl mx-auto px-6 flex gap-6 -mb-px overflow-x-auto"
+        >
+          {(
+            [
+              ["revisar", "Revisar documento"],
+              ["gestion", "Gestión de documentos"],
+            ] as [Seccion, string][]
+          ).map(([clave, etiqueta]) => (
+            <button
+              key={clave}
+              onClick={() => {
+                setSeccion(clave);
+                setDocAbierto(null);
+              }}
+              aria-current={seccion === clave ? "page" : undefined}
+              className={`whitespace-nowrap border-b-2 pb-2.5 pt-1 text-sm font-medium transition ${
+                seccion === clave
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-foreground-muted hover:text-foreground"
+              }`}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </nav>
         <div className="accent-stripe" />
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-10 flex flex-col gap-8">
+      <main className="max-w-6xl mx-auto px-6 py-10 flex flex-col gap-8">
+        {seccion === "gestion" ? (
+          <GestionDocumentos key={vista} vista={vista} abrirId={docAbierto} onAbrirId={setDocAbierto} />
+        ) : (
+          <>
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
             {vista === "administradora" ? "Administración y revisión" : "Revisar un documento"}
@@ -255,7 +329,7 @@ export default function HomePage() {
                   type="file"
                   accept=".pdf,.docx,.xlsx,.xls,.csv,.txt"
                   className="hidden"
-                  onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+                  onChange={(e) => elegirArchivo(e.target.files?.[0] ?? null)}
                 />
                 <span className="text-sm font-medium text-foreground">
                   {archivo ? archivo.name : "Haz clic para elegir un archivo"}
@@ -287,6 +361,55 @@ export default function HomePage() {
             )}
           </div>
 
+          <div className={`grid gap-4 ${vista !== "autora" ? "sm:grid-cols-2" : ""}`}>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="titulo" className="text-sm font-medium text-foreground">
+                Nombre del documento
+              </label>
+              <input
+                id="titulo"
+                type="text"
+                value={titulo}
+                maxLength={200}
+                onChange={(e) => {
+                  setTitulo(e.target.value);
+                  setTituloManual(e.target.value.trim().length > 0);
+                }}
+                placeholder="Ej.: Papel de trabajo — Modelos educativos"
+                className="w-full rounded-[10px] border border-border px-4 py-3 text-sm outline-none focus:border-ve-azul focus:ring-2 focus:ring-ve-azul/20 transition"
+              />
+              <p className="text-xs text-foreground-muted">
+                Con este nombre queda registrado en Gestión de documentos y se nombra el PDF.
+              </p>
+            </div>
+
+            {vista !== "autora" && (
+              <div className="flex flex-col gap-2">
+                <label htmlFor="autora" className="text-sm font-medium text-foreground">
+                  Autora del documento
+                </label>
+                <select
+                  id="autora"
+                  value={autorId}
+                  onChange={(e) => setAutorId(e.target.value)}
+                  className="w-full rounded-[10px] border border-border bg-white px-4 py-3 text-sm outline-none focus:border-ve-azul focus:ring-2 focus:ring-ve-azul/20 transition"
+                >
+                  <option value="">Yo ({perfil.nombre ?? perfil.email})</option>
+                  {autoras
+                    .filter((a) => a.email !== perfil.email)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.nombre}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-foreground-muted">
+                  Si eliges a otra persona, el documento queda a su nombre y le llega un aviso.
+                </p>
+              </div>
+            )}
+          </div>
+
           {error && (
             <p className="text-sm text-rojo bg-rojo/5 rounded-[10px] px-3 py-2">{error}</p>
           )}
@@ -302,37 +425,44 @@ export default function HomePage() {
 
         {reporte && (
           <div className="flex flex-col gap-6">
-            <div className="flex items-baseline justify-between gap-4 flex-wrap">
-              <h2 className="text-lg font-medium text-foreground truncate">{reporte.documento}</h2>
-              <span className="text-xs text-foreground-muted">
-                {new Date(reporte.fecha).toLocaleString("es-VE")}
-              </span>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <h2 className="text-lg font-medium text-foreground break-words">
+                  {reporte.documento}
+                </h2>
+                <p className="mt-1 text-sm text-foreground-muted">
+                  {reporte.autorNombre ? `${reporte.autorNombre} · ` : ""}
+                  {formatearFecha(reporte.fecha)}
+                </p>
+              </div>
+              {reporte.documentoId && <BotonPdf documentoId={reporte.documentoId} vista={vista} />}
             </div>
 
-            {reporte.advertenciaExtraccion && (
+            {reporte.guardado ? (
+              <p className="text-sm text-foreground-muted bg-surface rounded-[10px] px-3 py-2">
+                Guardado en Gestión de documentos.{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSeccion("gestion");
+                    setDocAbierto(reporte.documentoId ?? null);
+                  }}
+                  className="font-medium text-foreground underline underline-offset-2"
+                >
+                  Ver en la lista
+                </button>
+              </p>
+            ) : (
               <p className="text-sm text-[#8a6d00] bg-amarillo/10 rounded-[10px] px-3 py-2">
-                {reporte.advertenciaExtraccion}
+                El reporte se generó, pero no pudo guardarse en Gestión de documentos. Avisa a la
+                administradora técnica.
               </p>
             )}
 
-            <DictamenBanner
-              dictamen={reporte.dictamen}
-              eliminatoriosDisparados={reporte.eliminatoriosDisparados}
-            />
-
-            <EjeSection
-              titulo="Eje A — Alineación con VTG"
-              subtitulo="¿Qué tan alineado está el documento con el modelo que estamos construyendo?"
-              eje={reporte.ejeA}
-            />
-
-            <EjeSection
-              titulo="Eje B — Distancia del modelo anterior"
-              subtitulo="¿Qué tan lejos está del currículo bolivariano (2007) y del currículo de 1997? Más parecido = peor."
-              eje={reporte.ejeB}
-              detalleOculto={reporte.vista === "autora"}
-            />
+            <ReporteView reporte={reporte} />
           </div>
+        )}
+          </>
         )}
       </main>
     </div>
