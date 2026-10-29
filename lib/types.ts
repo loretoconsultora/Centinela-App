@@ -1,4 +1,5 @@
-import type { Dictamen, Eliminatorio, ColorBand, Rol } from "./rubric";
+import type { Dictamen, Eliminatorio, ColorBand } from "./rubric";
+import type { Rol } from "./roles";
 
 export interface CriterioReporte {
   id: string;
@@ -20,14 +21,15 @@ export interface EjeReporte {
 
 export interface ReporteAPI {
   documento: string;
-  rol: Rol;
+  // Vista con la que se corrió el análisis (la verifica el servidor contra
+  // los roles reales de la usuaria).
+  vista: Rol;
   fecha: string;
   dictamen: Dictamen;
   eliminatoriosDisparados: Eliminatorio[];
   ejeA: EjeReporte;
-  // ejeB viene completo solo si rol === "nucleo"; para "autora" se omiten
-  // las señales de alerta y citas político-ideológicas sensibles del detalle,
-  // dejando solo el puntaje y color por criterio.
+  // En la vista de Autora el Eje B llega simplificado: solo puntaje y color
+  // por criterio, sin justificaciones ni citas político-ideológicas.
   ejeB: EjeReporte;
   advertenciaExtraccion?: string;
 }

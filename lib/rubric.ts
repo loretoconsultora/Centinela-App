@@ -289,12 +289,3 @@ export function construirReporte(
   const { dictamen, eliminatoriosDisparados } = calcularDictamen(ejeA, ejeB);
   return { ejeA, ejeB, eliminatoriosDisparados, dictamen };
 }
-
-// Roles soportados por la fase MVP (password única + selector de rol).
-// El rol decide si se muestra el reporte completo o el simplificado.
-export type Rol = "autora" | "nucleo";
-
-export const ROL_LABEL: Record<Rol, string> = {
-  autora: "Autora",
-  nucleo: "Revisora de núcleo / Administradora",
-};
