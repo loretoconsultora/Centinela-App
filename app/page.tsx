@@ -52,7 +52,7 @@ export default function HomePage() {
   const [autoras, setAutoras] = useState<AutoraOpcion[]>([]);
   const [autorId, setAutorId] = useState("");
 
-  const [modo, setModo] = useState<Modo>("archivo");
+  const [modo, setModo] = useState<Modo>("link");
   const [archivo, setArchivo] = useState<File | null>(null);
   const [texto, setTexto] = useState("");
   const [link, setLink] = useState("");
@@ -330,9 +330,9 @@ export default function HomePage() {
             <div className="flex gap-2 mb-3">
               {(
                 [
-                  ["archivo", "Archivo"],
+                  ["link", "Link de Drive"],
                   ["texto", "Pegar texto"],
-                  ["link", "Link"],
+                  ["archivo", "Adjuntar archivo"],
                 ] as [Modo, string][]
               ).map(([m, label]) => (
                 <button
@@ -346,6 +346,16 @@ export default function HomePage() {
                   }`}
                 >
                   {label}
+                  {m === "link" && (
+                    <span className="ml-2 rounded-full bg-verde/10 px-2 py-0.5 text-[11px] font-medium text-verde">
+                      Recomendado
+                    </span>
+                  )}
+                  {m === "archivo" && (
+                    <span className="ml-2 text-[11px] font-normal text-foreground-muted">
+                      hasta 4 MB
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -362,7 +372,10 @@ export default function HomePage() {
                   {archivo ? archivo.name : "Haz clic para elegir un archivo"}
                 </span>
                 <span className="text-xs text-foreground-muted">
-                  PDF, Word (.docx), Excel/Sheets (.xlsx, .csv)
+                  PDF, Word (.docx), Excel/Sheets (.xlsx, .csv) · máximo 4 MB
+                </span>
+                <span className="text-xs text-foreground-muted">
+                  ¿Pesa más? Súbelo a Drive y usa &quot;Link de Drive&quot;: ahí el máximo es 30 MB.
                 </span>
               </label>
             )}
@@ -387,9 +400,9 @@ export default function HomePage() {
                 className="w-full rounded-[10px] border border-border px-4 py-3 text-sm outline-none focus:border-ve-azul focus:ring-2 focus:ring-ve-azul/20 transition"
               />
               <p className="text-xs text-foreground-muted">
-                Sirve un Google Doc o Sheet, un archivo de Drive (PDF, Word, Excel) o un link directo
-                a un PDF. Debe estar compartido como &quot;cualquier persona con el enlace puede
-                ver&quot;. Máximo 30 MB.
+                La forma más práctica: pega el link de tu archivo de Drive (PDF, Word, Excel) o de un Google
+                Doc o Sheet. En Drive, pulsa Compartir y deja el acceso en &quot;Cualquier persona con el
+                enlace&quot; como lector. También sirve un link directo a un PDF. Máximo 30 MB.
               </p>
               </div>
             )}
